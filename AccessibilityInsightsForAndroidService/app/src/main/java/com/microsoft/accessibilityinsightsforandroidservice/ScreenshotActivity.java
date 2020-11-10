@@ -7,8 +7,11 @@ import android.app.Activity;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
+
+import java.util.Set;
 
 public class ScreenshotActivity extends Activity {
   private MediaProjectionManager mediaManager;
@@ -32,6 +35,12 @@ public class ScreenshotActivity extends Activity {
 
     if (MediaProjectionHolder.get() == null) {
       Toast.makeText(this, R.string.screenshot_permission_not_granted, Toast.LENGTH_LONG).show();
+    }
+
+    if (Settings.canDrawOverlays(this) == false) {
+      Intent overlay = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
+      overlay.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+      startActivity(overlay);
     }
 
     finish();

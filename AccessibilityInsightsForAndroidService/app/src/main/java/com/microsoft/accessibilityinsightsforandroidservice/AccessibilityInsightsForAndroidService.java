@@ -20,10 +20,15 @@ package com.microsoft.accessibilityinsightsforandroidservice;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Intent;
+import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.provider.Settings;
 import android.util.DisplayMetrics;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
+
+import java.util.ArrayList;
 
 public class AccessibilityInsightsForAndroidService extends AccessibilityService {
   private static final String TAG = "AccessibilityInsightsForAndroidService";
@@ -37,6 +42,8 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
   private HandlerThread screenshotHandlerThread = null;
   private ScreenshotController screenshotController = null;
   private int activeWindowId = -1; // Set initial state to an invalid ID
+  private WindowManager myWindowManager;
+  private ArrayList<ElementHighlight> views;
 
   public AccessibilityInsightsForAndroidService() {
     deviceConfigFactory = new DeviceConfigFactory();
@@ -75,6 +82,11 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
   @Override
   protected void onServiceConnected() {
     Logger.logVerbose(TAG, "*** onServiceConnected");
+
+    if (Settings.canDrawOverlays(this)) {
+      myWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+      views = new ArrayList<ElementHighlight>();
+    }
 
     this.startScreenshotActivity();
 
@@ -119,6 +131,23 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
     return false;
   }
 
+  private void cleanViews() {
+    if (myWindowManager != null) {
+      views.forEach(view -> {
+        myWindowManager.removeView(view);
+      });
+      views.clear();
+    }
+  }
+
+  private void redrawHighlights() {
+    if (myWindowManager != null) {
+      views.forEach(view -> {
+        view.invalidate();
+      });
+    }
+  }
+
   @Override
   public void onAccessibilityEvent(AccessibilityEvent event) {
     // This logic ensures that we only track events from the active window, as
@@ -133,9 +162,39 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
       activeWindowId = windowId;
     }
 
+    if (eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+      createHighlightBox(event);
+    }
+
+    if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            || eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            || eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED
+            || eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
+      redrawHighlights();
+    }
+
     if (activeWindowId == windowId) {
       eventHelper.recordEvent(getRootInActiveWindow());
     }
+  }
+
+  private void createHighlightBox(AccessibilityEvent event) {
+    if (Settings.canDrawOverlays(this) && isNodeUnique(event)) {
+      ElementHighlight elementHighlight = new ElementHighlight(this, event);
+      WindowManager.LayoutParams params = new WindowManager.LayoutParams(getRealDisplayMetrics().widthPixels, getRealDisplayMetrics().heightPixels, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
+      myWindowManager.addView(elementHighlight, params);
+      views.add(elementHighlight);
+    }
+  }
+
+  private boolean isNodeUnique(AccessibilityEvent event) {
+    for (ElementHighlight view : views) {
+      if (view.getEventSource().equals(event.getSource())) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   @Override
