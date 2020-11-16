@@ -18,10 +18,12 @@ public class ElementHighlight extends View {
     private static final String TAG = "ElementHighlight";
     private Paint paint = new Paint();
     private AccessibilityNodeInfo eventSource;
+    private int yOffset;
 
-    public ElementHighlight(Context context, AccessibilityEvent event) {
+    public ElementHighlight(Context context, AccessibilityEvent event, int yOffset) {
         super(context);
         this.eventSource = event.getSource();
+        this.yOffset = yOffset;
     }
 
     @Override
@@ -35,9 +37,11 @@ public class ElementHighlight extends View {
 
         Rect rect = new Rect();
         eventSource.getBoundsInScreen(rect);
+        rect.offset(0, yOffset);
         paint.setStyle(Paint.Style.STROKE);
         paint.setColor(Color.RED);
         paint.setStrokeWidth(5);
+        Log.v(TAG, "" + canvas.getHeight() + "," + canvas.getWidth());
         canvas.drawRect(rect, paint);
     }
 

@@ -21,14 +21,22 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Intent;
 import android.graphics.PixelFormat;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
+import android.media.MediaRecorder;
+import android.media.projection.MediaProjection;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Date;
 
 public class AccessibilityInsightsForAndroidService extends AccessibilityService {
   private static final String TAG = "AccessibilityInsightsForAndroidService";
@@ -44,6 +52,9 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
   private int activeWindowId = -1; // Set initial state to an invalid ID
   private WindowManager myWindowManager;
   private ArrayList<ElementHighlight> views;
+  private MediaRecorder mediaRecorder;
+  private VirtualDisplay virtualDisplay;
+  private int count;
 
   public AccessibilityInsightsForAndroidService() {
     deviceConfigFactory = new DeviceConfigFactory();
@@ -176,12 +187,28 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
     if (activeWindowId == windowId) {
       eventHelper.recordEvent(getRootInActiveWindow());
     }
+
+    if (count == 30) {
+      startRecording();
+    }
+
+    if (count == 200) {
+      stopRecording();
+    }
+
+    count++;
+    Log.v(TAG, "count is " + count);
   }
 
   private void createHighlightBox(AccessibilityEvent event) {
     if (Settings.canDrawOverlays(this) && isNodeUnique(event)) {
-      ElementHighlight elementHighlight = new ElementHighlight(this, event);
-      WindowManager.LayoutParams params = new WindowManager.LayoutParams(getRealDisplayMetrics().widthPixels, getRealDisplayMetrics().heightPixels, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
+      int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+      int offset = 0;
+      if (resourceId > 0) {
+        offset = getResources().getDimensionPixelSize(resourceId);
+      }
+      ElementHighlight elementHighlight = new ElementHighlight(this, event, offset);
+      WindowManager.LayoutParams params = new WindowManager.LayoutParams(getRealDisplayMetrics().widthPixels, getRealDisplayMetrics().heightPixels, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE  | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT);
       myWindowManager.addView(elementHighlight, params);
       views.add(elementHighlight);
     }
@@ -204,5 +231,56 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
     Intent startScreenshot = new Intent(this, ScreenshotActivity.class);
     startScreenshot.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
     startActivity(startScreenshot);
+  }
+
+  private void startRecording() {
+    MediaProjection mediaProjection = MediaProjectionHolder.get();
+    if (mediaProjection != null && mediaRecorder == null) {
+      Log.v(TAG, "about to start");
+      mediaRecorder = new MediaRecorder();
+      prepareMediaRecorder();
+      DisplayMetrics displayMetrics = getRealDisplayMetrics();
+      virtualDisplay = mediaProjection.createVirtualDisplay("my display", displayMetrics.widthPixels, displayMetrics.heightPixels, displayMetrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, mediaRecorder.getSurface(), null, null);
+      mediaRecorder.start();
+    }
+  }
+
+  private void prepareMediaRecorder() {
+    DisplayMetrics displayMetrics = getRealDisplayMetrics();
+    String directory = this.getExternalFilesDir(null) + File.separator + "Test_Recordings_For_Focus_Order";
+    File folder = new File(directory);
+    if (!folder.exists()) {
+      folder.mkdir();
+    }
+    String filename = (new Date()).toString() + "_focus_recording.mp4";
+    String filepath = directory + File.separator + filename;
+    mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
+    mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+    mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+    mediaRecorder.setVideoEncodingBitRate(512 * 1000);
+    mediaRecorder.setVideoFrameRate(24);
+    mediaRecorder.setVideoSize(displayMetrics.widthPixels, displayMetrics.heightPixels);
+    mediaRecorder.setOutputFile(filepath);
+    Log.v(TAG, "file path is: " + filepath);
+    try {
+      mediaRecorder.prepare();
+
+    } catch (Exception  e) {
+      e.printStackTrace();
+      return;
+    }
+  }
+
+  private void stopRecording() {
+    Log.v(TAG, "about to stop");
+    if (mediaRecorder != null) {
+      mediaRecorder.stop();
+      mediaRecorder.reset();
+      mediaRecorder = null;
+    }
+
+    if (virtualDisplay != null) {
+      virtualDisplay.release();
+    }
   }
 }
