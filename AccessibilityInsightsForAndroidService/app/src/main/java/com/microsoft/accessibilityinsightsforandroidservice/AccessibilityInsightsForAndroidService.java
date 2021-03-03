@@ -94,10 +94,7 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
   protected void onServiceConnected() {
     Logger.logVerbose(TAG, "*** onServiceConnected");
 
-    if (Settings.canDrawOverlays(this)) {
-      myWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-      views = new ArrayList<ElementHighlight>();
-    }
+    views = new ArrayList<ElementHighlight>();
 
     this.startScreenshotActivity();
 
@@ -173,15 +170,21 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
       activeWindowId = windowId;
     }
 
-    if (eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
-      createHighlightBox(event);
+    if (Settings.canDrawOverlays(this) && myWindowManager == null) {
+      myWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
     }
 
-    if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-            || eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
-            || eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED
-            || eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
-      redrawHighlights();
+    if (myWindowManager != null) {
+      if (eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+        createHighlightBox(event);
+      }
+
+      if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+              || eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+              || eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED
+              || eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
+        redrawHighlights();
+      }
     }
 
     if (activeWindowId == windowId) {
