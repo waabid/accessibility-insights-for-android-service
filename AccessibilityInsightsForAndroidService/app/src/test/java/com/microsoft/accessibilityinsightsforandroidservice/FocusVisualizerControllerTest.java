@@ -87,7 +87,7 @@ public class FocusVisualizerControllerTest {
 
 
     @Test
-    public void onFocusVisualizationStateChangeDoesNotResetVisualizationsIfStateIsTrue() throws Exception {
+    public void onFocusVisualizationStateChangeDoesResetsVisualizationsIfStateIsFalse() throws Exception {
         PowerMockito.mockStatic(Looper.class);
         when(Looper.getMainLooper()).thenReturn(looperMock);
         whenNew(Handler.class).withArguments(looperMock).thenReturn(handlerMock);
