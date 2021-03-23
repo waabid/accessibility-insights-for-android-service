@@ -20,7 +20,7 @@ package com.microsoft.accessibilityinsightsforandroidservice;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Intent;
-import android.graphics.PixelFormat;
+import android.content.res.Configuration;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.DisplayMetrics;
@@ -41,8 +41,12 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
   private int activeWindowId = -1; // Set initial state to an invalid ID
   private FocusVisualizationStateManager focusVisualizationStateManager;
   private AccessibilityEventDispatcher accessibilityEventDispatcher;
+  private WindowManager windowManager;
+  private LayoutParamGenerator layoutParamGenerator;
+  private FocusVisualizationCanvas focusVisualizationCanvas;
   private FocusVisualizer focusVisualizer;
   private FocusVisualizerController focusVisualizerController;
+  private int orientation = -1;
 
   public AccessibilityInsightsForAndroidService() {
     deviceConfigFactory = new DeviceConfigFactory();
@@ -113,13 +117,14 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
             MediaProjectionHolder::get);
 
     StopServerThread();
-    WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+    windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
     focusVisualizationStateManager = new FocusVisualizationStateManager();
     accessibilityEventDispatcher = new AccessibilityEventDispatcher();
-    FocusVisualizationCanvas focusVisualizationCanvas = new FocusVisualizationCanvas(this);
+    focusVisualizationCanvas = new FocusVisualizationCanvas(this);
     focusVisualizer = new FocusVisualizer(new FocusVisualizerStyles(), focusVisualizationCanvas);
-    LayoutParamGenerator layoutParamGenerator = new LayoutParamGenerator(this::getRealDisplayMetrics);
-    focusVisualizerController = new FocusVisualizerController(focusVisualizer, focusVisualizationStateManager, windowManager, layoutParamGenerator::get, focusVisualizationCanvas);
+    layoutParamGenerator = new LayoutParamGenerator(this::getRealDisplayMetrics);
+    focusVisualizerController = new FocusVisualizerController(focusVisualizer, focusVisualizationStateManager);
+    orientation = getResources().getConfiguration().orientation;
 
     windowManager.addView(focusVisualizationCanvas, layoutParamGenerator.get());
     setupAccessbilityEventDispatcher();
@@ -158,6 +163,18 @@ public class AccessibilityInsightsForAndroidService extends AccessibilityService
       accessibilityEventDispatcher.onAccessibilityEvent(event, getRootInActiveWindow());
       eventHelper.recordEvent(getRootInActiveWindow());
     }
+  }
+
+  @Override
+  public void onConfigurationChanged(Configuration newConfig) {
+    super.onConfigurationChanged(newConfig);
+    if(newConfig.orientation == this.orientation){
+      return;
+    }
+
+    this.orientation = newConfig.orientation;
+    this.windowManager.updateViewLayout(this.focusVisualizationCanvas, this.layoutParamGenerator.get());
+    this.focusVisualizerController.onOrientationChange();
   }
 
   @Override

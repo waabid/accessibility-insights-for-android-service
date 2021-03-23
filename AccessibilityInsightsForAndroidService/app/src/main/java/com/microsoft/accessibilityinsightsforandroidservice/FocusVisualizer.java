@@ -112,7 +112,7 @@ public class FocusVisualizer {
     this.tabStopCount = 0;
     this.focusElementHighlights.clear();
     this.focusElementLines.clear();
-//    this.setDrawItemsAndRedraw();
+    this.setDrawItemsAndRedraw();
   }
 
   private void setDrawItemsAndRedraw() {
